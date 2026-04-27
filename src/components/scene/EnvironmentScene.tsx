@@ -1,6 +1,6 @@
 import { OrbitControls, TransformControls, Environment } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
-import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
+import { forwardRef, Suspense, useEffect, useImperativeHandle, useRef } from 'react'
 import { Group, Vector3 } from 'three'
 import { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import type { CameraCoordinates, SceneLayout, HdrType, RendererType, OrbLighting, GroundGrid } from '../../types'
@@ -260,7 +260,9 @@ export const EnvironmentScene = forwardRef<EnvironmentSceneHandle, EnvironmentSc
         <pointLight intensity={0.7} position={[-2.5, 1.4, -2]} color="#41618f" />
 
         <group ref={groundRef}>
-          <WetAsphaltGround groundGrid={groundGrid} />
+          <Suspense fallback={null}>
+            <WetAsphaltGround groundGrid={groundGrid} />
+          </Suspense>
         </group>
         <group ref={groupRef} rotation={[0, layout.groupRotation, 0]}>
           <Orb ref={orbRef} energy={orbEnergy} transform={layout.orb} lightEnabled={orbLighting} />

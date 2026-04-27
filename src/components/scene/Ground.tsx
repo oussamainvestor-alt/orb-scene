@@ -3,6 +3,16 @@ import { useMemo } from 'react'
 import { MeshStandardMaterial, RepeatWrapping } from 'three'
 import type { GroundGrid } from '../../types'
 
+const TEXTURE_PATHS = {
+  map: '/textures/asphalt_basecolor.png',
+  normalMap: '/textures/asphalt_normal.png',
+  roughnessMap: '/textures/asphalt_roughness.png',
+  metalnessMap: '/textures/asphalt_metallic.png',
+  displacementMap: '/textures/asphalt_displacement.png',
+}
+
+useTexture.preload(Object.values(TEXTURE_PATHS))
+
 function getTilePositions(groundGrid: GroundGrid): Array<[number, number, number]> {
   if (groundGrid === 1) return [[0, 0, 0]]
   if (groundGrid === 2) return [[-5, 0, -5], [5, 0, -5], [-5, 0, 5], [5, 0, 5]]
@@ -17,13 +27,7 @@ function getTilePositions(groundGrid: GroundGrid): Array<[number, number, number
 type WetAsphaltGroundProps = { groundGrid?: GroundGrid }
 
 export function WetAsphaltGround({ groundGrid = 1 }: WetAsphaltGroundProps) {
-  const maps = useTexture({
-    map: '/textures/asphalt_basecolor.png',
-    normalMap: '/textures/asphalt_normal.png',
-    roughnessMap: '/textures/asphalt_roughness.png',
-    metalnessMap: '/textures/asphalt_metallic.png',
-    displacementMap: '/textures/asphalt_displacement.png',
-  })
+  const maps = useTexture(TEXTURE_PATHS)
 
   const tileSize = groundGrid <= 1 ? 20 : groundGrid === 2 ? 10 : 5
 
