@@ -5,6 +5,7 @@ import type { ScreenTransform } from '../../types'
 
 type FloatingScreenProps = {
   videoUrl: string | null
+  videoMuted: boolean
   transform: ScreenTransform
 }
 
@@ -95,7 +96,7 @@ const FRAGMENT_SHADER = `
   }
 `
 
-export const FloatingScreen = forwardRef<Group, FloatingScreenProps>(({ videoUrl, transform }, ref) => {
+export const FloatingScreen = forwardRef<Group, FloatingScreenProps>(({ videoUrl, videoMuted, transform }, ref) => {
   const planeWidth = 2.7
   const [ratioW, ratioH] = transform.aspectRatio
   const screenAspect = Math.max(1, ratioW || 1) / Math.max(1, ratioH || 1)
@@ -157,7 +158,7 @@ export const FloatingScreen = forwardRef<Group, FloatingScreenProps>(({ videoUrl
 
     videoEl.src = videoUrl
     videoEl.loop = true
-    videoEl.muted = true
+    videoEl.muted = videoMuted
     videoEl.autoplay = true
     videoEl.preload = 'auto'
     videoEl.playsInline = true
@@ -184,6 +185,10 @@ export const FloatingScreen = forwardRef<Group, FloatingScreenProps>(({ videoUrl
       window.removeEventListener('pointerdown', attemptPlay)
     }
   }, [videoEl, videoUrl, videoTexture])
+
+  useEffect(() => {
+    videoEl.muted = videoMuted
+  }, [videoEl, videoMuted])
 
   useFrame(({ clock }) => {
     const u = material.uniforms

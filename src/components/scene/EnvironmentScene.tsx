@@ -11,6 +11,7 @@ import { WetAsphaltGround } from './Ground'
 
 type EnvironmentSceneProps = {
   videoUrl: string | null
+  videoMuted: boolean
   orbEnergy: number
   orbLighting?: OrbLighting
   rendererType?: RendererType
@@ -58,6 +59,7 @@ export const EnvironmentScene = forwardRef<EnvironmentSceneHandle, EnvironmentSc
   (
     {
       videoUrl,
+      videoMuted,
       orbEnergy,
       orbLighting,
       rendererType,
@@ -292,7 +294,7 @@ export const EnvironmentScene = forwardRef<EnvironmentSceneHandle, EnvironmentSc
 
         <group ref={groupRef} rotation={[0, layout.groupRotation, 0]}>
           <Orb ref={orbRef} energy={orbEnergy} transform={layout.orb} lightEnabled={orbLighting} />
-          <FloatingScreen ref={screenRef} videoUrl={videoUrl} transform={layout.screen} />
+          <FloatingScreen ref={screenRef} videoUrl={videoUrl} videoMuted={videoMuted} transform={layout.screen} />
         </group>
 
         {dragTarget === 'orb' && orbRef.current && (

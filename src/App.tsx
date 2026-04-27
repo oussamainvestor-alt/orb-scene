@@ -143,6 +143,7 @@ function App() {
   const sceneRef = useRef<EnvironmentSceneHandle | null>(null)
   const [videoUrl, setVideoUrl] = useState<string | null>(null)
   const [videoFileName, setVideoFileName] = useState('No video selected')
+  const [videoMuted, setVideoMuted] = useState(false)
   const [audioFileName, setAudioFileName] = useState('No audio selected')
   const [dragTarget, setDragTarget] = useState<'none' | 'orb' | 'screen' | 'ground'>('none')
   const [layout, setLayout] = useState<SceneLayout>(DEFAULT_LAYOUT)
@@ -335,11 +336,13 @@ function App() {
         useMicrophone={useMicrophone}
         sourceLabel={sourceLabel}
         videoFileName={videoFileName}
+        videoMuted={videoMuted}
         audioFileName={audioFileName}
         recordedUrl={recordedUrl}
         recordedFileName={recordedFileName}
         onToggleMic={setMicMode}
         onVideoUpload={handleVideoUpload}
+        onVideoMuteToggle={() => setVideoMuted(!videoMuted)}
         onAudioUpload={handleAudioUpload}
         onCoordinateUpload={handleCoordinatesUpload}
         onCoordinatesDownload={handleCoordinatesDownload}
@@ -390,6 +393,7 @@ function App() {
       <EnvironmentScene
         ref={sceneRef}
         videoUrl={videoUrl}
+        videoMuted={videoMuted}
         orbEnergy={orbEnergy}
         orbLighting={orbLighting}
         rendererType={rendererType}

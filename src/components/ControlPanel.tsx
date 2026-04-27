@@ -5,11 +5,13 @@ type ControlPanelProps = {
   useMicrophone: boolean
   sourceLabel: string
   videoFileName: string
+  videoMuted: boolean
   audioFileName: string
   recordedUrl: string | null
   recordedFileName: string
   onToggleMic: (next: boolean) => Promise<void>
   onVideoUpload: (file: File | null) => void
+  onVideoMuteToggle: () => void
   onAudioUpload: (file: File | null) => void
   onCoordinateUpload: (file: File | null) => void
   onCoordinatesDownload: () => void
@@ -61,6 +63,13 @@ export function ControlPanel(props: ControlPanelProps) {
         />
         <small>{props.videoFileName}</small>
       </label>
+      <button
+        type="button"
+        className={`btn ${props.videoMuted ? 'secondary' : ''}`}
+        onClick={props.onVideoMuteToggle}
+      >
+        {props.videoMuted ? 'Unmute video' : 'Mute video'}
+      </button>
 
       <label className="field">
         <span>Upload voice audio</span>
