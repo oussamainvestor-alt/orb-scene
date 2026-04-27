@@ -285,7 +285,7 @@ export const EnvironmentScene = forwardRef<EnvironmentSceneHandle, EnvironmentSc
 
         <group ref={groundRef}>
           <Suspense fallback={null}>
-            <WetAsphaltGround groundGrid={groundGrid} />
+            <WetAsphaltGround key={groundGrid} groundGrid={groundGrid} />
           </Suspense>
         </group>
         {hdrType && hdrType.length > 0 && <HdrEnvironment file={`/${hdrType}`} />}
