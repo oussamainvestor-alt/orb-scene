@@ -1,0 +1,120 @@
+ISSUE: One-frame GLTF material flash before ShaderMaterial applies on the wet asphalt ground
+==============================================================================================
+
+PROJECT CONTEXT
+---------------
+React 19 + React Three Fiber (R3F) v9 + Three.js 0.183
+The scene has a tiled ground made from a GLTF file (/ground_concrete.glb).
+Each tile is rendered by a component called GroundTile.
+
+CURRENT CODE (GroundTile component)
+------------------------------------
+function GroundTile({ position, material }) {
+  const { scene } = useGLTF('/ground_concrete.glb')
+  const cloned = useMemo(() => scene.clone(), [scene])
+
+  useEffect(() => {
+    cloned.traverse((child) => {
+      if (child instanceof Mesh) {
+        child.material = material   // <-- ShaderMaterial applied HERE
+        child.receiveShadow = true
+      }
+    })
+  }, [cloned, material])
+
+  return <primitive object={cloned} position={position} />
+}
+
+WHAT HAPPENS
+------------
+Frame 1 (paint):
+  - React renders <primitive object={cloned} />
+  - cloned is the raw GLTF clone — it still has the original MeshStandardMaterial from the GLB
+  - The GPU draws the original GLTF material for one frame (grey/matte concrete)
+
+After Frame 1 (effect fires):
+  - useEffect runs, traverses cloned, replaces each mesh's material with the custom ShaderMaterial
+  - React schedules a re-render
+
+Frame 2:
+  - The GPU now draws with the ShaderMaterial (wet asphalt with planar reflection)
+
+VISIBLE RESULT
+--------------
+The user sees one frame of grey/matte GLTF concrete, then it snaps to the wet asphalt look.
+On a fast GPU this is 1 frame (~16ms), still clearly visible as a flash/pop.
+
+ROOT CAUSE
+----------
+useEffect in React is intentionally deferred — it runs AFTER the browser has painted.
+This is by design for effects that don't need to block paint (e.g., subscriptions, timers).
+But here we NEED the material swap to happen before the first paint, not after.
+
+useMemo runs synchronously during render, before the component returns JSX.
+useEffect runs asynchronously after the browser has painted.
+useLayoutEffect runs synchronously after React commits the DOM but before the browser paints —
+however in R3F/WebGL context, "before browser paint" may not help because R3F's render loop
+runs inside requestAnimationFrame, not directly tied to React's commit phase.
+
+ADDITIONAL COMPLEXITY
+---------------------
+1. React 19 StrictMode: React intentionally mounts -> unmounts -> remounts components in dev.
+   This means useEffect runs twice. If we dispose materials in cleanup, we break the WebGL
+   resource on the second mount. So we must NOT dispose in cleanup.
+
+2. The ShaderMaterial (`material` prop) is created with useMemo in the parent (WetAsphaltGround)
+   and shared across ALL tile instances. It must not be recreated per tile.
+
+3. scene.clone() creates a deep clone of the GLTF scene graph but does NOT clone materials —
+   it shares the material references from the original. This is fine because we replace them anyway.
+
+4. The cloned scene object is created with useMemo, so it is stable across re-renders.
+   The material reference is also stable (from parent's useMemo). The effect only runs once
+   (on mount) because [cloned, material] never changes after initial render.
+
+WHAT THE FIX NEEDS TO DO
+------------------------
+Apply the ShaderMaterial to every Mesh in the cloned GLTF scene SYNCHRONOUSLY,
+before React returns the JSX for the first render, so the GPU never sees the original material.
+
+The ideal place is inside the same useMemo that creates the clone, like this:
+
+  const cloned = useMemo(() => {
+    const clone = scene.clone()
+    clone.traverse((child) => {
+      if (child instanceof Mesh) {
+        child.material = material
+        child.receiveShadow = true
+      }
+    })
+    return clone
+  }, [scene, material])
+
+  return <primitive object={cloned} position={position} />
+
+This way:
+  - The clone is created with the ShaderMaterial already applied
+  - React renders the <primitive> with the correct material from frame 1
+  - No useEffect needed
+  - No flash
+
+POTENTIAL ISSUE WITH THIS FIX
+------------------------------
+useMemo with [scene, material] as deps: both `scene` (from useGLTF) and `material` (from parent)
+are stable references (created with useMemo themselves and never recreated). So this useMemo
+will only run once — on mount. This is correct behavior.
+
+StrictMode: React will run this useMemo twice in dev (mount, unmount, remount).
+The second run creates a fresh clone with the material already applied. This is safe because
+we are not disposing anything in cleanup — we just let the old clone be GC'd.
+
+FULL CONTEXT FILES
+------------------
+src/components/scene/Ground.tsx  — contains GroundTile and WetAsphaltGround
+src/components/scene/EnvironmentScene.tsx  — renders <WetAsphaltGround groundGrid={groundGrid} />
+
+QUESTION FOR CLAUDE
+-------------------
+Given the above, please rewrite the GroundTile function in Ground.tsx to apply the ShaderMaterial
+synchronously inside useMemo (no useEffect), eliminating the one-frame GLTF material flash.
+Keep everything else in Ground.tsx exactly the same. The fix is surgical — only GroundTile changes.

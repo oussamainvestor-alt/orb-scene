@@ -1,0 +1,183 @@
+# Camera Default Button Issue - Detailed Explanation
+
+## Project Overview
+
+This is a React Three Fiber 3D scene project called "orb-scene" deployed at Vercel. The project has:
+- A glowing energy Orb positioned at local coordinates [0, 1.35, 0]
+- A floating video Screen positioned at local coordinates [0, 1.65, -2.4]
+- Both orb and screen are inside a group that rotates around the Y-axis via `groupRotation`
+- The rotation is applied in EnvironmentScene.tsx: `<group ref={groupRef} rotation={[0, layout.groupRotation, 0]}>`
+
+## The Problem
+
+The "Default" camera button should always position the camera:
+1. **Behind the orb** (orb is between camera and screen)
+2. **Looking at the screen dead center**
+3. **At ANY rotation angle**
+
+### Current Behavior (BROKEN):
+- Button works correctly when `groupRotation = 0`
+- Button works correctly when you first click it, THEN change rotation
+- Button FAILS when you change `groupRotation` to a non-zero value, THEN click "Default"
+- At non-zero rotation, camera goes to wrong position (screen NOT dead center)
+
+## Code Structure
+
+### getCameraPresetCoordinates in App.tsx (lines 108-144)
+
+```typescript
+function getCameraPresetCoordinates(preset: CameraPresetId, layout: SceneLayout): CameraCoordinates {
+  const rot = layout.groupRotation || 0
+  const cosR = Math.cos(rot)
+  const sinR = Math.sin(rot)
+
+  const toWorld = (p: Vec3): Vec3 => [
+    p[0] * cosR - p[2] * sinR,
+    p[1],
+    p[0] * sinR + p[2] * cosR,
+  ]
+
+  const orbW = toWorld(layout.orb.position)
+  const screenW = toWorld(layout.screen.position)
+
+  const dx = screenW[0] - orbW[0]
+  const dz = screenW[2] - orbW[2]
+  const dist = Math.sqrt(dx * dx + dz * dz) || 1
+  const dirX = dx / dist
+  const dirZ = dz / dist
+
+  switch (preset) {
+    case 'behindOrb': {
+      const camDist = Math.max(2.7, dist + 1.1)
+      return {
+        position: [
+          orbW[0] - dirX * camDist,
+          screenW[1] + 0.3,
+          orbW[2] - dirZ * camDist,
+        ],
+        target: [screenW[0], screenW[1], screenW[2]],
+        zoom: 1,
+      }
+    }
+  }
+}
+```
+
+### applyCameraPreset in App.tsx (lines 304-311)
+
+```typescript
+const applyCameraPreset = (preset: CameraPresetId) => {
+  const next = getCameraPresetCoordinates(preset, layout)
+  commitSnapshot({
+    ...cloneSnapshot(currentSnapshotRef.current),
+    camera: next,
+    activeCameraPreset: preset,
+  })
+}
+```
+
+### EnvironmentScene.tsx useEffect (lines 191-217)
+
+```typescript
+useEffect(() => {
+  const controls = controlsRef.current
+  if (!controls) return
+
+  const eps = 0.001
+  const pos = controls.object.position
+  const tgt = controls.target
+  const [px, py, pz] = cameraCoordinates.position
+  const [tx, ty, tz] = cameraCoordinates.target
+
+  if (
+    Math.abs(pos.x - px) < eps &&
+    Math.abs(pos.y - py) < eps &&
+    Math.abs(pos.z - pz) < eps &&
+    Math.abs(tgt.x - tx) < eps &&
+    Math.abs(tgt.y - ty) < eps &&
+    Math.abs(tgt.z - tz) < eps
+  ) {
+    return
+  }
+
+  pos.set(px, py, pz)
+  tgt.set(tx, ty, tz)
+  controls.object.zoom = cameraCoordinates.zoom || 1
+  controls.object.updateProjectionMatrix()
+  controls.update()
+}, [cameraCoordinates])
+```
+
+### Rotation applied in EnvironmentScene.tsx (line 265)
+
+```tsx
+<group ref={groupRef} rotation={[0, layout.groupRotation, 0]}>
+```
+
+## Root Cause Hypothesis
+
+The issue is likely one of these:
+
+### Hypothesis 1: State/Closure Issue
+`applyCameraPreset` captures `layout` from React state, but there may be a timing issue where the layout's `groupRotation` hasn't updated yet when the function runs.
+
+### Hypothesis 2: Coordinate System Confusion
+The camera is placed in WORLD space, but the orb+screen group rotates around the origin. When rotation is non-zero:
+- The `toWorld()` function correctly converts local positions to world positions
+- But the camera position calculation might need to ALSO rotate relative to the scene
+
+### Hypothesis 3: Camera Positioning Math
+The current formula places camera at `orbW - dir * camDist`. At non-zero rotation:
+- `orbW` is correct (world position of orb)
+- `dir` points from orb to screen in world space
+- But maybe the camera should be calculated differently?
+
+## What Works vs What Doesn't
+
+### WORKS:
+1. Click "Default" button when rotation = 0
+2. Change rotation, then immediately manually move camera (not via button)
+3. Click "Default" first, THEN change rotation
+
+### DOESN'T WORK:
+1. Change rotation to non-zero value (e.g., 90°)
+2. Click "Default" button
+3. Camera goes to wrong position - screen is NOT dead center
+
+## Expected Behavior
+
+At any `groupRotation` value:
+- Camera should be positioned on the LINE connecting orb to screen
+- Camera should be on the ORB side of that line (orb between camera and screen)
+- Camera should target the screen's world position
+- Screen should always be dead center of view
+
+## The Fix Needed
+
+The function should:
+1. Take current `layout.groupRotation` as input
+2. Convert orb and screen positions from local to world space using `toWorld()`
+3. Calculate direction from orb to screen in WORLD space
+4. Place camera behind orb (along that world-space direction)
+5. Target the screen's world position
+
+## Files to Modify
+
+- `src/App.tsx` - The `getCameraPresetCoordinates` and/or `applyCameraPreset` functions
+
+## Test Steps
+
+1. Set rotation to 0 → Click "Default" → Should work
+2. Set rotation to 90° → Click "Default" → Should work (currently broken)
+3. Set rotation to -90° → Click "Default" → Should work
+4. Set rotation to 180° → Click "Default" → Should work
+
+## Reference View
+
+The target camera view should look like this image:
+https://media.discordapp.net/attachments/1490403442852757667/1497695688472137818/vlcsnap-2026-04-19-02h03m31s419.png
+
+In this view:
+- Screen is dead center
+- Orb is between camera and screen
+- Camera looks at screen level (not from above/below)

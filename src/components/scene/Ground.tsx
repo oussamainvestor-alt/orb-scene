@@ -1,6 +1,6 @@
 import { useGLTF } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
-import { useEffect, useMemo, useRef } from 'react'
+import { useMemo, useRef } from 'react'
 import {
   Group,
   LinearFilter,
@@ -175,16 +175,16 @@ type TileProps = { position: [number, number, number]; material: ShaderMaterial 
 
 function GroundTile({ position, material }: TileProps) {
   const { scene } = useGLTF('/ground_concrete.glb')
-  const cloned = useMemo(() => scene.clone(), [scene])
-
-  useEffect(() => {
-    cloned.traverse((child) => {
+  const cloned = useMemo(() => {
+    const c = scene.clone()
+    c.traverse((child) => {
       if (child instanceof Mesh) {
         child.material = material
         child.receiveShadow = true
       }
     })
-  }, [cloned, material])
+    return c
+  }, [scene, material])
 
   return <primitive object={cloned} position={position} />
 }
